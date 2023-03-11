@@ -1,74 +1,98 @@
 import cv2
 import numpy as np
+from detectron2.data import MetadataCatalog
+from detectron2.utils.visualizer import Visualizer
+
+from modules.DetectronNetwork import DetectronNetwork
 
 
 class GenerationImage:
-    def __init__(self, imagepath: str, generation: int):
-        self.image = cv2.imread(imagepath)
+    def __init__(
+        self,
+        imagepath: str,
+        generation: int,
+        detectron: DetectronNetwork,
+        conf: float = 0.5,
+    ):
+        try:
+            # check if the image exists
+            open(imagepath)
+        except Exception as e:
+            raise FileNotFoundError("Image not found, please check input_images folder")
+        self.img0 = cv2.imread(imagepath)
+        self.image = self.img0.copy()
         self.generation = generation
         self.detected_objects = []
         self.image_name = imagepath.split("\\")[-1]
         self.outputpath = (
             "output_images\gen_" + str(self.generation) + "_" + self.image_name
         )
-        self.conf = 0.5
+        self.conf = conf
+        self.detectron = detectron
+        self.outputs = self.detect()
+        self.overlayed_image = self.get_mask_from_outputs()
+        cv2.imwrite(self.outputpath, self.overlayed_image)
+        self.masks = self.get_pred_masks_only()
+        self.important_objects = self.get_important_objects()
+        self.back_ground = self.get_background()
 
     # object detection using YOLO algorithm
-    def detect(self, net, outputlayers):
-        height, width, channels = self.image.shape
-        blob = cv2.dnn.blobFromImage(
-            self.image, 0.00392, (416, 416), (0, 0, 0), True, crop=False
+    def detect(self):
+        outs = self.detectron.get_outputs(self.image)
+        return outs
+
+    def get_mask_from_outputs(self):
+        v = Visualizer(
+            self.image[:, :, ::-1],
+            MetadataCatalog.get(self.detectron.cfg.DATASETS.TRAIN[0]),
+            scale=1.2,
         )
-        print(blob.shape)
-        net.setInput(blob)
-        outs = net.forward(outputlayers)
-        return np.vstack(outs), height, width
+        out = v.draw_instance_predictions(self.outputs["instances"].to("cpu"))
+        return out.get_image()[:, :, ::-1]
 
-    # get pixel coordinates of the detected object
-    def get_coordinates(self, outs, height, width):
-        class_ids = []
-        confidences = []
-        boxes = []
-        for output in outs:
-            scores = output[5:]
-            classID = np.argmax(scores)
-            confidence = scores[classID]
-            if confidence > self.conf:
-                x, y, w, h = output[:4] * np.array([width, height, width, height])
-                p0 = int(x - w // 2), int(y - h // 2)
-                p1 = int(x + w // 2), int(y + h // 2)
-                boxes.append([*p0, int(w), int(h)])
-                confidences.append(float(confidence))
-                class_ids.append(classID)
-                # cv.rectangle(img, p0, p1, WHITE, 1)
-        return boxes, confidences, class_ids
+    def get_pred_masks_only(self):
+        masks = []
+        for object in self.outputs["instances"].to("cpu").pred_masks:
+            mask = np.zeros(self.image.shape, self.image.dtype)
+            mask[object] = 255
+            masks.append(mask)
+        return masks
 
-    def draw(self, boxes, confidences, classIDs, colors, classes):
-        indices = cv2.dnn.NMSBoxes(boxes, confidences, self.conf, self.conf - 0.1)
-        if len(indices) > 0:
-            for i in indices.flatten():
-                (x, y) = (boxes[i][0], boxes[i][1])
-                (w, h) = (boxes[i][2], boxes[i][3])
-                color = [int(c) for c in colors[classIDs[i]]]
-                cv2.rectangle(self.image, (x, y), (x + w, y + h), color, 2)
-                text = "{}: {:.4f}".format(classes[classIDs[i]], confidences[i])
-                cv2.putText(
-                    self.image,
-                    text,
-                    (x, y - 5),
-                    cv2.FONT_HERSHEY_SIMPLEX,
-                    0.5,
-                    color,
-                    1,
-                )
-                self.detected_objects.append(classes[classIDs[i]])
+    def get_important_objects(self):
+        important_objects = []
+        for mask in self.masks:
+            important_objects.append(
+                cv2.bitwise_and(self.image, self.image, mask=mask[:, :, 2])
+            )
+        return important_objects
 
-            return self.detected_objects
+    def get_background(self):
+        background = self.image.copy()
+        antimask = np.ones(self.image.shape, self.image.dtype)
+        for mask in self.outputs["instances"].to("cpu").pred_masks:
+            antimask[mask] = 0
+        return cv2.bitwise_and(background, background, mask=antimask[:, :, 2])
 
     # save the image
     def save(self):
-        cv2.imwrite(self.outputpath, self.image)
-        return self.outputpath
+        for i, object in enumerate(self.important_objects):
+            cv2.imwrite(
+                "output_images\gen_"
+                + str(self.generation)
+                + "_"
+                + str(i)
+                + "_"
+                + self.image_name,
+                object,
+            )
+        cv2.imwrite(
+            "output_images\gen_"
+            + str(self.generation)
+            + "_background_"
+            + self.image_name,
+            self.back_ground,
+        )
+        cv2.imwrite(self.outputpath, self.overlayed_image)
 
 
 # Path: modules\generational_image.py

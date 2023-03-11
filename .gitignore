@@ -18,3 +18,5 @@ venv
 .vscode
 *.pyc
 !.gitignore
+*.png
+*.jpg
