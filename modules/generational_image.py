@@ -9,21 +9,33 @@ from modules.DetectronNetwork import DetectronNetwork
 class GenerationImage:
     def __init__(
         self,
-        imagepath: str,
-        generation: int,
-        detectron: DetectronNetwork,
+        imagepath: str = None,
+        generation: int = 0,
+        detectron: DetectronNetwork = None,
         conf: float = 0.5,
+        image_array: np.ndarray = None,
     ):
-        try:
-            # check if the image exists
-            open(imagepath)
-        except Exception as e:
-            raise FileNotFoundError("Image not found, please check input_images folder")
-        self.img0 = cv2.imread(imagepath)
-        self.image = self.img0.copy()
+        if imagepath == None:
+            self.img0 = image_array
+            self.image = self.img0.copy()
+        else:
+            try:
+                # check if the image exists
+                open(imagepath)
+
+            except Exception as e:
+                raise FileNotFoundError(
+                    "Image not found, please check input_images folder"
+                )
+            self.img0 = cv2.imread(imagepath)
+            self.image = self.img0.copy()
         self.generation = generation
         self.detected_objects = []
-        self.image_name = imagepath.split("\\")[-1]
+        self.image_name = (
+            imagepath.split("\\")[-1]
+            if imagepath
+            else "child_gen_" + str(generation) + ".jpg"
+        )
         self.outputpath = (
             "output_images\gen_" + str(self.generation) + "_" + self.image_name
         )
@@ -66,7 +78,7 @@ class GenerationImage:
             )
         return important_objects
 
-    def get_background(self):
+    def get_background(self) -> np.ndarray:
         background = self.image.copy()
         antimask = np.ones(self.image.shape, self.image.dtype)
         for mask in self.outputs["instances"].to("cpu").pred_masks:
