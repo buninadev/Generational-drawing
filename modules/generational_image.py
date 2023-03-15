@@ -1,3 +1,4 @@
+from os import makedirs
 import cv2
 import numpy as np
 from detectron2.data import MetadataCatalog
@@ -14,6 +15,7 @@ class GenerationImage:
         detectron: DetectronNetwork = None,
         conf: float = 0.5,
         image_array: np.ndarray = None,
+        image_name: str = None,
     ):
         if imagepath == None:
             self.img0 = image_array
@@ -31,11 +33,8 @@ class GenerationImage:
             self.image = self.img0.copy()
         self.generation = generation
         self.detected_objects = []
-        self.image_name = (
-            imagepath.split("\\")[-1]
-            if imagepath
-            else "child_gen_" + str(generation) + ".jpg"
-        )
+        default_name = imagepath.split("\\")[-1] if imagepath else "gen_image"
+        self.image_name = image_name if image_name else default_name
         self.outputpath = (
             "output_images\gen_" + str(self.generation) + "_" + self.image_name
         )
@@ -43,7 +42,6 @@ class GenerationImage:
         self.detectron = detectron
         self.outputs = self.detect()
         self.overlayed_image = self.get_mask_from_outputs()
-        cv2.imwrite(self.outputpath, self.overlayed_image)
         self.masks = self.get_pred_masks_only()
         self.important_objects = self.get_important_objects()
         self.back_ground = self.get_background()
@@ -86,25 +84,31 @@ class GenerationImage:
         return cv2.bitwise_and(background, background, mask=antimask[:, :, 2])
 
     # save the image
-    def save(self):
-        for i, object in enumerate(self.important_objects):
-            cv2.imwrite(
-                "output_images\gen_"
-                + str(self.generation)
-                + "_"
-                + str(i)
-                + "_"
-                + self.image_name,
-                object,
-            )
-        cv2.imwrite(
-            "output_images\gen_"
-            + str(self.generation)
-            + "_background_"
-            + self.image_name,
-            self.back_ground,
-        )
-        cv2.imwrite(self.outputpath, self.overlayed_image)
+    def save(self, folder: str = None, overlay: bool = False):
+        if folder:
+            makedirs(folder, exist_ok=True)
+            if overlay:
+                cv2.imwrite(
+                    folder + "\gen_" + str(self.generation) + "_" + self.image_name,
+                    self.overlayed_image,
+                )
+            else:
+                cv2.imwrite(
+                    folder + "\gen_" + str(self.generation) + "_" + self.image_name,
+                    self.image,
+                )
+        else:
+            if overlay:
+                cv2.imwrite(self.outputpath, self.overlayed_image)
+            else:
+                cv2.imwrite(self.outputpath, self.image)
+
+    # clear class from memory
+    def clear(self):
+        self.important_objects = None
+        self.masks = None
+        self.outputs = None
+        self.overlayed_image = None
 
 
 # Path: modules\generational_image.py

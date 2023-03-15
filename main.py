@@ -1,3 +1,4 @@
+import numpy as np
 from modules.DetectronNetwork import DetectronNetwork
 from modules.Incubator import Incubator
 from modules.generational_image import GenerationImage
@@ -8,5 +9,4 @@ if __name__ == "__main__":
     detectron = DetectronNetwork()
     parent1 = GenerationImage(imagepath=image1, generation=0, detectron=detectron)
     parent2 = GenerationImage(imagepath=image2, generation=0, detectron=detectron)
-    incubator = Incubator(parent1, parent2).breed(4).save()
-    breakpoint()
+    Incubator(parent1, parent2).breed_incest(10).save()

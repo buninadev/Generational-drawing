@@ -5,6 +5,7 @@
 from detectron2 import model_zoo
 from detectron2.config import get_cfg
 from detectron2.engine import DefaultPredictor
+import torch
 
 
 class DetectronNetwork:
@@ -16,8 +17,9 @@ class DetectronNetwork:
         self.cfg.MODEL.ROI_HEADS.SCORE_THRESH_TEST = 0.5  # set threshold for this model
         # Find a model from detectron2's model zoo. You can use the https://dl.fbaipublicfiles... url as well
         self.cfg.MODEL.WEIGHTS = model_zoo.get_checkpoint_url(self.model_path)
+        self.predictor = DefaultPredictor(self.cfg)
 
     def get_outputs(self, image):
-        self.predictor = DefaultPredictor(self.cfg)
-        outputs = self.predictor(image)
+        with torch.no_grad():
+            outputs = self.predictor(image)
         return outputs
