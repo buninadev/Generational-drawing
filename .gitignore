@@ -20,3 +20,4 @@ venv
 !.gitignore
 *.png
 *.jpg
+*.mp4
